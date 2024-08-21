@@ -5,7 +5,6 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
-from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import MaxAbsScaler
@@ -32,18 +31,9 @@ class SentimentAnalysis:
         self.X_test = None
         self.y_test = None
         self.output_file_path = output_file_path
-
+        
+        # Open the output file in write mode, clearing its contents if it exists
         open(self.output_file_path, 'w')
-
-        # # Check if the output file exists; if it does, clear it
-        # if os.path.exists(self.output_file_path):
-        #     with open(self.output_file_path, 'w') as f:
-        #         f.write("")  # Clear the file
-        # else:
-        #     # If the file doesn't exist, create a new empty file
-        #     with open(self.output_file_path, 'w') as f:
-        #         f.write("")  # Create a new file
-
 
     def preprocess(self, text):
         # Remove special characters and numbers
@@ -76,23 +66,6 @@ class SentimentAnalysis:
 
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
 
-    def _train_svm(self):
-        svm_param_grid = {'C': [0.1, 1, 10], 'kernel': ['linear', 'rbf']}
-        svm_grid = GridSearchCV(SVC(), svm_param_grid, refit=True, cv=5, verbose=2)
-        svm_grid.fit(self.X_train, self.y_train)
-        y_pred_svm = svm_grid.predict(self.X_test)
-        print("Best SVM Parameters:", svm_grid.best_params_)
-        classification_rep = classification_report(self.y_test, y_pred_svm)
-        print("SVM Classification Report:")
-        print(classification_rep)
-
-        svm_scores = cross_val_score(svm_grid.best_estimator_, self.X_train, self.y_train, cv=5)
-        print("SVM Cross-validation scores:", svm_scores)
-
-        # Save results and visualize
-        self._save_output("SVM", classification_rep, svm_scores)
-        self._visualize_scores("SVM", self.y_test, y_pred_svm, svm_scores)
-
     def _train_logistic_regression(self):
         lr_param_grid = {'C': [0.01, 0.1, 1, 10], 'max_iter': [500, 1000, 2000]}
         lr_grid = GridSearchCV(LogisticRegression(class_weight='balanced'), lr_param_grid, refit=True, cv=5, verbose=2)
@@ -112,7 +85,6 @@ class SentimentAnalysis:
 
     def train_and_evaluate(self, X, y):
         self._scale_and_resample(X, y)
-        self._train_svm()
         self._train_logistic_regression()
 
     def _save_output(self, model_name, classification_rep, cross_val_scores):
@@ -202,6 +174,97 @@ class SentimentAnalysis:
         # Plot common words
         self._plot_common_words(common_supportive_words, common_non_supportive_words)
 
+    def sentiment_distribution(self):
+        sentiment_counts = self._data['Sentiment'].value_counts()
+        total = len(self._data)
+        distribution = (sentiment_counts / total) * 100
+        print("Sentiment Distribution:")
+        print(distribution)
+
+        with open(self.output_file_path, 'a') as f:
+            f.write("Sentiment Distribution:\n")
+            f.write(distribution.to_string() + "\n\n")
+
+    def most_common_perspectives(self):
+        positive_comments = self._data[self._data['Sentiment'] == 'positive']['clean_comment']
+        negative_comments = self._data[self._data['Sentiment'] == 'negative']['clean_comment']
+
+        positive_words = ' '.join(positive_comments).split()
+        negative_words = ' '.join(negative_comments).split()
+
+        common_positive = Counter(positive_words).most_common(10)
+        common_negative = Counter(negative_words).most_common(10)
+
+        print("Most Common Positive Perspectives:")
+        print(common_positive)
+
+        print("\nMost Common Negative Perspectives:")
+        print(common_negative)
+
+        with open(self.output_file_path, 'a') as f:
+            f.write("Most Common Positive Perspectives:\n")
+            for word, count in common_positive:
+                f.write(f"{word}: {count}\n")
+
+            f.write("\nMost Common Negative Perspectives:\n")
+            for word, count in common_negative:
+                f.write(f"{word}: {count}\n")
+
+            f.write("\n")
+
+    def main_themes(self):
+        from sklearn.feature_extraction.text import CountVectorizer
+        vectorizer = CountVectorizer(max_df=0.95, min_df=2, stop_words='english')
+        X = vectorizer.fit_transform(self._data['clean_comment'])
+        features = vectorizer.get_feature_names_out()
+        word_count = X.toarray().sum(axis=0)
+        themes = Counter(dict(zip(features, word_count))).most_common(10)
+        
+        print("Main Themes:")
+        print(themes)
+
+        with open(self.output_file_path, 'a') as f:
+            f.write("Main Themes:\n")
+            for theme, count in themes:
+                f.write(f"{theme}: {count}\n")
+            f.write("\n")
+
+    def example_perspectives(self):
+        positive_example = self._data[self._data['Sentiment'] == 'positive']['Sentence'].iloc[0]
+        negative_example = self._data[self._data['Sentiment'] == 'negative']['Sentence'].iloc[0]
+        neutral_example = self._data[self._data['Sentiment'] == 'neutral']['Sentence'].iloc[0]
+
+        print("Example Supportive Perspective:")
+        print(positive_example)
+
+        print("\nExample Opposed Perspective:")
+        print(negative_example)
+
+        print("\nExample Moderate Perspective:")
+        print(neutral_example)
+
+        with open(self.output_file_path, 'a') as f:
+            f.write("Example Supportive Perspective:\n")
+            f.write(positive_example + "\n\n")
+
+            f.write("Example Opposed Perspective:\n")
+            f.write(negative_example + "\n\n")
+
+            f.write("Example Moderate Perspective:\n")
+            f.write(neutral_example + "\n\n")
+
+    def practical_suggestions(self):
+        suggestions = self._data[self._data['clean_comment'].str.contains('should|recommend|suggest|need', regex=True)]['Sentence']
+        print("Practical Suggestions and Recommendations:")
+        for suggestion in suggestions:
+            print(f"- {suggestion}")
+
+        with open(self.output_file_path, 'a') as f:
+            f.write("Practical Suggestions and Recommendations:\n")
+            for suggestion in suggestions:
+                f.write(f"- {suggestion}\n")
+            f.write("\n")
+
 
 def main():
     # Example usage
@@ -219,7 +282,12 @@ def main():
     # Train and evaluate models
     analysis.train_and_evaluate(X, sentiments)
     
-    # Analyze patterns and trends
+    # Analyze and save results to output file
     analysis.analyze_patterns()
+    analysis.sentiment_distribution()
+    analysis.most_common_perspectives()
+    analysis.main_themes()
+    analysis.example_perspectives()
+    analysis.practical_suggestions()
 
 main()
