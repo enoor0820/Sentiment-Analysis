@@ -13,6 +13,10 @@ from imblearn.over_sampling import SMOTE
 from bokeh.plotting import figure, output_file, save
 from bokeh.io import show
 from bokeh.layouts import column
+from collections import Counter
+import matplotlib.pyplot as plt
+import os
+
 
 # Download necessary NLTK data
 nltk.download('punkt')
@@ -28,6 +32,17 @@ class SentimentAnalysis:
         self.X_test = None
         self.y_test = None
         self.output_file_path = output_file_path
+
+        open(self.output_file_path, 'w')
+
+        # # Check if the output file exists; if it does, clear it
+        # if os.path.exists(self.output_file_path):
+        #     with open(self.output_file_path, 'w') as f:
+        #         f.write("")  # Clear the file
+        # else:
+        #     # If the file doesn't exist, create a new empty file
+        #     with open(self.output_file_path, 'w') as f:
+        #         f.write("")  # Create a new file
 
 
     def preprocess(self, text):
@@ -137,6 +152,56 @@ class SentimentAnalysis:
         layout = column(p1, p2)
         save(layout)
         show(layout)
+    
+    def _create_common_words_df(self):
+        # Analyze comments in support of the policy
+        supportive_comments = self._data[self._data['Sentiment'] == 'positive']
+        non_supportive_comments = self._data[self._data['Sentiment'] == 'negative']
+
+        # Most common words in supportive comments
+        supportive_words = ' '.join(supportive_comments['clean_comment']).split()
+        common_supportive_words = Counter(supportive_words).most_common(50)
+
+        # Most common words in non-supportive comments
+        non_supportive_words = ' '.join(non_supportive_comments['clean_comment']).split()
+        common_non_supportive_words = Counter(non_supportive_words).most_common(50)
+
+        # Combine common words into a single DataFrame
+        common_words = []
+        for word, count in common_supportive_words:
+            common_words.append({'word': word, 'count': count, 'supportive': 'True'})
+        for word, count in common_non_supportive_words:
+            common_words.append({'word': word, 'count': count, 'supportive': 'False'})
+
+        common_words_df = pd.DataFrame(common_words)
+        
+        # Save common words to CSV file
+        common_words_df.to_csv('common_words.csv', index=False)
+
+        return common_supportive_words, common_non_supportive_words
+
+    def _plot_common_words(self, common_supportive_words, common_non_supportive_words):
+        # Plotting common words
+        supportive_df = pd.DataFrame(common_supportive_words, columns=['word', 'count'])
+        non_supportive_df = pd.DataFrame(common_non_supportive_words, columns=['word', 'count'])
+
+        plt.figure(figsize=(12, 6))
+        plt.bar(supportive_df['word'], supportive_df['count'], color='blue', alpha=0.7, label='Supportive')
+        plt.bar(non_supportive_df['word'], non_supportive_df['count'], color='red', alpha=0.7, label='Non-Supportive')
+        plt.title('Common Words in Comments')
+        plt.xlabel('Words')
+        plt.ylabel('Count')
+        plt.xticks(rotation=90)
+        plt.legend()
+        plt.show()
+
+    def analyze_patterns(self):
+        # Create common words DataFrame
+        common_supportive_words, common_non_supportive_words = self._create_common_words_df()
+        
+        # Plot common words
+        self._plot_common_words(common_supportive_words, common_non_supportive_words)
+
 
 def main():
     # Example usage
@@ -153,5 +218,8 @@ def main():
 
     # Train and evaluate models
     analysis.train_and_evaluate(X, sentiments)
+    
+    # Analyze patterns and trends
+    analysis.analyze_patterns()
 
 main()
